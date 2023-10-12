@@ -5,31 +5,67 @@ import { knex } from '../database'
 import { CheckSessionIdExists } from '../middlewares/check-session-id-exists'
 
 export async function mealsRoutes(app: FastifyInstance) {
-  app.get('/:id', { preHandler: [CheckSessionIdExists] }, async (request) => {
-    const getMealsParamsSchema = z.object({
-      id: z.string().uuid(),
-    })
-
-    const { id } = getMealsParamsSchema.parse(request.params)
-
-    const meal = await knex('meals').where('id', id).select('*').first()
-
-    return meal
-  })
-
   app.get(
-    '/user/:id',
+    '/:id',
     { preHandler: [CheckSessionIdExists] },
-    async (request) => {
+    async (request, response) => {
+      const sessionId = request.cookies.sessionId
+
       const getMealsParamsSchema = z.object({
         id: z.string().uuid(),
       })
 
       const { id } = getMealsParamsSchema.parse(request.params)
 
-      const meals = await knex('meals').where('user_id', id).select('*')
+      const meal = await knex('meals').where('id', id).select('*').first()
 
-      return { meals }
+      if (meal !== undefined) {
+        const getUserIdResponse = await knex('users')
+          .select('id')
+          .where('session_id', sessionId)
+          .first()
+
+        const userId = getUserIdResponse?.id
+
+        if (userId !== meal.user_id) {
+          return response.status(401).send({
+            result: 'error',
+            message:
+              'Você não tem permissão para ver refeições de outro usuário',
+          })
+        }
+      }
+
+      return meal
+    },
+  )
+
+  app.get(
+    '/user',
+    { preHandler: [CheckSessionIdExists] },
+    async (request, response) => {
+      const sessionId = request.cookies.sessionId
+
+      const meals = await knex('meals')
+        .select(
+          'meals.id',
+          'meals.user_id',
+          'meals.name',
+          'meals.description',
+          'meals.dateAndHour',
+          'meals.inDiet',
+        )
+        .innerJoin('users', 'users.id', 'meals.user_id')
+        .where('session_id', sessionId)
+
+      if (meals.length === 0) {
+        return response.status(404).send({
+          result: 'error',
+          message: 'Você não tem nenhuma refeição cadastrada',
+        })
+      }
+
+      return meals
     },
   )
 
@@ -73,11 +109,30 @@ export async function mealsRoutes(app: FastifyInstance) {
     '/:id',
     { preHandler: [CheckSessionIdExists] },
     async (request, response) => {
+      const sessionId = request.cookies.sessionId
+
       const getMealsParamsSchema = z.object({
         id: z.string().uuid(),
       })
 
       const { id } = getMealsParamsSchema.parse(request.params)
+
+      const meal = await knex('meals').select('*').where('id', id).first()
+
+      const getUserIdResponse = await knex('users')
+        .select('id')
+        .where('session_id', sessionId)
+        .first()
+
+      const userId = getUserIdResponse?.id
+
+      if (userId !== meal.user_id) {
+        return response.status(401).send({
+          result: 'error',
+          message:
+            'Você não tem permissão para alterar refeições de outro usuário',
+        })
+      }
 
       const editMealBodySchema = z.object({
         name: z.string(),
@@ -104,11 +159,30 @@ export async function mealsRoutes(app: FastifyInstance) {
     '/:id',
     { preHandler: [CheckSessionIdExists] },
     async (request, response) => {
+      const sessionId = request.cookies.sessionId
+
       const getMealsParamsSchema = z.object({
         id: z.string().uuid(),
       })
 
       const { id } = getMealsParamsSchema.parse(request.params)
+
+      const meal = await knex('meals').select('*').where('id', id).first()
+
+      const getUserIdResponse = await knex('users')
+        .select('id')
+        .where('session_id', sessionId)
+        .first()
+
+      const userId = getUserIdResponse?.id
+
+      if (userId !== meal.user_id) {
+        return response.status(401).send({
+          result: 'error',
+          message:
+            'Você não tem permissão para alterar refeições de outro usuário',
+        })
+      }
 
       await knex('meals').where('id', id).delete()
 
